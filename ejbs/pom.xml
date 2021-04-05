@@ -23,8 +23,7 @@
         <module>admin</module>
         <module>refdata</module>
         <module>claim</module>
-        <module>boundary</module>
-
+        <module>community-boundary</module>
     </modules>
     <dependencies>
         <dependency>
