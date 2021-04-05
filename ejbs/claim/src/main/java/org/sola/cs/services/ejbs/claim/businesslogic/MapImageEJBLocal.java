@@ -12,4 +12,6 @@ public interface MapImageEJBLocal extends AbstractEJBLocal {
     BufferedImage getMapImage(String claimId, int width, int height, double scale, boolean drawScale, String scaleLabel);
 
     BufferedImage getMapImage(String claimId, int width, int height, boolean drawScale, String scaleLabel);
+    
+    BufferedImage getBoundaryMapImage(String boundaryId, int width, int height, boolean drawScale, String scaleLabel);
 }

@@ -21,6 +21,8 @@ public class ClaimPermissions {
     boolean canCancel = false;
     boolean canTransfer = false;
     boolean canRenew = false;
+    boolean canRenumberClaim = false;
+    boolean canRenumber = false;
      
     public ClaimPermissions(){
     }
@@ -63,6 +65,14 @@ public class ClaimPermissions {
 
     public void setCanSubmitClaim(boolean canSubmitClaim) {
         this.canSubmitClaim = canSubmitClaim;
+    }
+    
+    public boolean isCanRenumberClaim() {
+        return canRenumberClaim;
+    }
+
+    public void setCanRenumberClaim(boolean canRenumberClaim) {
+        this.canRenumberClaim = canRenumberClaim;
     }
 
     public boolean isCanWithdraw() {
@@ -161,4 +171,11 @@ public class ClaimPermissions {
         this.canTransfer = canTransfer;
     }
 
+    public boolean isCanRenumber() {
+        return canRenumber;
+    }
+
+    public void setCanRenumber(boolean canRenumber) {
+        this.canRenumber = canRenumber;
+    }
 }

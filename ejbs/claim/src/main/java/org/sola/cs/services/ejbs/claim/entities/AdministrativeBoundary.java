@@ -44,6 +44,14 @@ public class AdministrativeBoundary extends AbstractVersionedEntity {
     
     public static final String PARAM_BOUNDARY_NAME = "boundaryName";
     public static final String WHERE_BY_BOUNDARY_NAME = "name = #{ " + PARAM_BOUNDARY_NAME + "}";
+    
+    public static final String PARAM_CUSTOM_SRID = "customSrid";
+    public static final String PARAM_BOUNDARY_ID = "boundaryId";
+    public static final String QUERY_GET_BY_ID = "select id, name, type_code, authority_name, parent_id, recorder_name, status_code, " 
+            + "st_astext(case when coalesce(#{ " + PARAM_CUSTOM_SRID + "},0) = 0 then geom else st_transform(st_setsrid(geom,4326),#{ " + PARAM_CUSTOM_SRID + "}) end) as geom, "
+            + "rowversion, change_user, rowidentifier "
+            + "FROM opentenure.administrative_boundary "
+            + "where id = #{ " + PARAM_BOUNDARY_ID + "}";
 
     public AdministrativeBoundary() {
         super();

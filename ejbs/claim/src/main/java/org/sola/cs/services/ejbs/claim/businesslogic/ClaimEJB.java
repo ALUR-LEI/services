@@ -994,7 +994,39 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    public List<SourceType> getDocumentTypesForIssuance(String langaugeCode) {
+    public boolean canRenumberClaim(String claimId) {
+        return canRenumberClaim(getRepository().getEntity(Claim.class, claimId), false);
+    }
+
+    private boolean canRenumberClaim(Claim claim, boolean throwException) {
+        // Check claim exists
+        if (claim == null) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_NOT_FOUND);
+            }
+            return false;
+        }
+
+        if  (!isInRole(RolesConstants.CS_MODERATE_CLAIM, RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_RECORD_CLAIM)) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.EXCEPTION_INSUFFICIENT_RIGHTS);
+            }
+            return false;
+        }
+
+        // Check claim nr begins with TEMP.... 
+        if (!(claim.getNr().substring(0,4)).equalsIgnoreCase("TEMP")) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CANT_RENUMBER);
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public List<SourceType> getDocumentTypesForIssuance(String languageCode) {
         String docTypesString = systemEjb.getSetting(ConfigConstants.DOCUMENTS_FOR_ISSUING_CERT, "");
         List<SourceType> docTypes = new ArrayList<SourceType>();
 
@@ -1002,7 +1034,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             String[] docTypeCodes = docTypesString.replace(" ", "").split(",");
             if (docTypeCodes != null && docTypeCodes.length > 0) {
 
-                List<SourceType> allDocTypes = refDataEjb.getCodeEntityList(SourceType.class, langaugeCode);
+                List<SourceType> allDocTypes = refDataEjb.getCodeEntityList(SourceType.class, languageCode);
 
                 if (allDocTypes != null && allDocTypes.size() > 0) {
                     for (SourceType docType : allDocTypes) {
@@ -1035,8 +1067,9 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             String missingDocs = "";
 
             for (SourceType docType : docTypes) {
-                boolean found = false;
-
+//                boolean found = false;
+// change 8 March  as error from claim.getAttachments following getDocumentTypesForIssuance
+                boolean found = true;
                 if (claim.getAttachments() != null && claim.getAttachments().size() > 0) {
                     for (Attachment attach : claim.getAttachments()) {
                         if (!StringUtility.isEmpty(attach.getTypeCode()) && attach.getTypeCode().equalsIgnoreCase(docType.getCode())) {
@@ -1128,8 +1161,9 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             String missingDocs = "";
 
             for (SourceType docType : docTypes) {
-                boolean found = false;
-
+//                boolean found = false;
+// change 8 March  as error from claim.getAttachments following getDocumentTypesForIssuance
+                boolean found = true;
                 if (claim.getAttachments() != null && claim.getAttachments().size() > 0) {
                     for (Attachment attach : claim.getAttachments()) {
                         if (!StringUtility.isEmpty(attach.getTypeCode()) && attach.getTypeCode().equalsIgnoreCase(docType.getCode())) {
@@ -1168,6 +1202,43 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
 
         // Do validations
         canSubmitClaim(claim, true);
+        validateClaim(claim, languageCode, true, true);
+
+        Claim challengedClaim = null;
+        if (!StringUtility.isEmpty(claim.getChallengedClaimId())) {
+            challengedClaim = getRepository().getEntity(Claim.class, claim.getChallengedClaimId());
+        }
+
+        boolean result = changeClaimStatus(claimId, challengedClaim, ClaimStatusConstants.UNMODERATED, null);
+
+        // send notifications
+        if (result) {
+            String bodyName;
+            String subjectName;
+
+            if (challengedClaim != null) {
+                bodyName = ConfigConstants.EMAIL_MSG_CLAIM_CHALLENGE_SUBMITTED_BODY;
+                subjectName = ConfigConstants.EMAIL_MSG_CLAIM_CHALLENGE_SUBMITTED_SUBJECT;
+            } else {
+                bodyName = ConfigConstants.EMAIL_MSG_CLAIM_SUBMITTED_BODY;
+                subjectName = ConfigConstants.EMAIL_MSG_CLAIM_SUBMITTED_SUBJECT;
+            }
+            sendNotification(claim, getChallengingClaimsByChallengedId(claim.getId()), challengedClaim, bodyName, subjectName);
+        }
+        return result;
+    }
+
+    @Override
+    @RolesAllowed({RolesConstants.CS_MODERATE_CLAIM, RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_RECORD_CLAIM})
+    public boolean renumberClaim(String claimId, String languageCode) {
+        if (StringUtility.isEmpty(claimId)) {
+            return false;
+        }
+
+        Claim claim = getRepository().getEntity(Claim.class, claimId);
+
+        // Do validations
+        canRenumberClaim(claim, true);
         validateClaim(claim, languageCode, true, true);
 
         Claim challengedClaim = null;
@@ -2550,19 +2621,43 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             }
             return false;
         }
-
-        // Check claim status and ownership -Removed Oct 2020 as documents can need to be added after certificate is issued
-        if (canIssueCertificate(claim, throwException)) {
-            return true;
-        }
-
-        if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.UNMODERATED)
+        // Only Recorder can add documents to created claims
+        if (claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.CREATED)
                 || !StringUtility.empty(claim.getRecorderName()).equalsIgnoreCase(getUserName())) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.EXCEPTION_INSUFFICIENT_RIGHTS);
             }
             return false;
         }
+
+        // Check user is assigned to the claim
+        String userName = getUserName();
+        if (!StringUtility.empty(claim.getAssigneeName()).equalsIgnoreCase(userName)) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_ASSIGNED_TO_OTHER_USER);
+            }
+            return false;
+        }
+        // Check user role
+        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_ISSUE_CERTIFICATE, RolesConstants.CS_CANCEL_CERTIFICATE, RolesConstants.CS_MODERATE_CLAIM)) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.EXCEPTION_INSUFFICIENT_RIGHTS);
+            }
+            return false;
+        }
+
+        // Check claim to be issued
+ //       if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
+//            if (throwException) {
+//                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CANT_ISSUE);
+//            }
+//            return false;
+//        }
+        // Removed March 2021 as documents can need to be added when certificate has been approved and after certificate is issued
+ //       if (canIssueCertificate(claim, throwException)) {
+ //           return true;
+ //       }
+
         return true;
     }
 

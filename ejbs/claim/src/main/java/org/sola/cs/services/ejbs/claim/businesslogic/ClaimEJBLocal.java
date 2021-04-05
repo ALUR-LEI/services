@@ -66,6 +66,8 @@ public interface ClaimEJBLocal extends AbstractEJBLocal {
     boolean canRenewCertificate(String ClaimId);
     boolean canTransferClaim(String claimId);
     boolean canCancelCertificate(String claimId);
+    boolean renumberClaim(String claimId, String languageCode);
+    boolean canRenumberClaim(String claimId);
     void addClaimAttachment(String claimId, String attachmentId);
     Attachment saveClaimAttachment(Attachment attachment, String languageCode);
     ClaimPermissions getClaimPermissions(String claimId);

@@ -13,7 +13,6 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.NoninvertibleTransformException;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.text.DecimalFormat;
@@ -51,6 +50,7 @@ import org.sola.common.SOLAException;
 import org.sola.cs.common.messaging.ServiceMessage;
 import org.sola.cs.services.ejb.system.businesslogic.SystemCSEJBLocal;
 import org.sola.cs.services.ejbs.admin.businesslogic.AdminCSEJBLocal;
+import org.sola.cs.services.ejbs.claim.entities.AdministrativeBoundary;
 import org.sola.cs.services.ejbs.claim.entities.ClaimSpatial;
 import org.sola.services.common.ejbs.AbstractEJB;
 import org.sola.services.common.logging.LogUtility;
@@ -73,7 +73,7 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
     private static final String resourcesPath = "/styles/";
     private final int mapMargin = 30;
     private final int minGridCuts = 1;
-    private final int coordWidth = 67;
+    private final int coordWidth = 100;
     private final int roundNumber = 5;
 
     /**
@@ -90,9 +90,23 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
         params.put(ClaimSpatial.PARAM_CUSTOM_SRID, srid);
         return getRepository().getEntityList(ClaimSpatial.class, params);
     }
+    
+    /**
+     * Returns administrative boundary by id
+     *
+     * @param boundaryId Boundary ID
+     * @param srid SRID
+     * @return
+     */
+    private List<AdministrativeBoundary> getAdminBoundary(String boundaryId, int srid) {
+        HashMap params = new HashMap();
+        params.put(CommonSqlProvider.PARAM_QUERY, AdministrativeBoundary.QUERY_GET_BY_ID);
+        params.put(AdministrativeBoundary.PARAM_BOUNDARY_ID, boundaryId);
+        params.put(AdministrativeBoundary.PARAM_CUSTOM_SRID, srid);
+        return getRepository().getEntityList(AdministrativeBoundary.class, params);
+    }
 
-    // Returns map filled with claim polygons
-    private MapContent getMap(String claimId, int width, int height) {
+    private CoordinateReferenceSystem getCrs(String customCrsWkt) {
         try {
             String crsWkt = "GEOGCS[\"WGS 84\", \n"
                     + "  DATUM[\"World Geodetic System 1984\", \n"
@@ -104,22 +118,34 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
                     + "  AXIS[\"Geodetic longitude\", EAST], \n"
                     + "  AUTHORITY[\"EPSG\",\"4326\"]]";
 
-            String customCrsWkt = systemEjb.getSetting(ConfigConstants.OT_TITLE_PLAN_CRS_WKT, "");
-            int customCrsInt = 0;
             CoordinateReferenceSystem crs;
 
             if (customCrsWkt != null && customCrsWkt.length() > 0) {
                 crsWkt = customCrsWkt;
                 crs = CRS.parseWKT(crsWkt);
-                customCrsInt = Integer.parseInt(crs.getIdentifiers().iterator().next().getCode());
             } else {
                 crs = CRS.parseWKT(crsWkt);
             }
+            return crs;
+        } catch (Exception e) {
+            LogUtility.log("Failed to create map", e);
+            throw new SOLAException(ServiceMessage.OT_WS_CLAIM_FAILED_TO_CREATE_MAP);
+        }
+    }
+
+    private MapContent getParcelMap(String claimId, int width, int height) {
+        try {
+            String customCrsWkt = systemEjb.getSetting(ConfigConstants.OT_TITLE_PLAN_CRS_WKT, "");
+            CoordinateReferenceSystem crs = getCrs(customCrsWkt);
+            int customCrsInt = 0;
+
+            if (customCrsWkt != null && customCrsWkt.length() > 0) {
+                customCrsInt = Integer.parseInt(crs.getIdentifiers().iterator().next().getCode());
+            } 
 
             SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
             builder.setName("parcel");
             builder.setCRS(crs);
-            //builder.setCRS(CRS.decode("EPSG:" + crs));
 
             // add attributes in order
             builder.add("geom", Polygon.class);
@@ -144,16 +170,75 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
                     wkt.read(claim.getGeom()), claim.getNr(), claim.isTarget()}, claim.getId()));
             }
 
-            SimpleFeatureSource parcelsSource = DataUtilities.source(claimFeatures);
+            URL sldURL = MapImageEJB.class.getResource(resourcesPath + "cert_parcel.xml");
+
+            return getMap("Parcels", sldURL, claimFeatures, width, height, crs);
+        } catch (Exception e) {
+            LogUtility.log("Failed to create map", e);
+            throw new SOLAException(ServiceMessage.OT_WS_CLAIM_FAILED_TO_CREATE_MAP);
+        }
+    }
+    
+    private MapContent getAdminBoundaryMap(String boundaryId, int width, int height) {
+        try {
+            String customCrsWkt = systemEjb.getSetting(ConfigConstants.OT_TITLE_PLAN_CRS_WKT, "");
+            CoordinateReferenceSystem crs = getCrs(customCrsWkt);
+            int customCrsInt = 0;
+
+            if (customCrsWkt != null && customCrsWkt.length() > 0) {
+                customCrsInt = Integer.parseInt(crs.getIdentifiers().iterator().next().getCode());
+            } 
+
+            SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
+            builder.setName("boundary");
+            builder.setCRS(crs);
+
+            // add attributes in order
+            builder.add("geom", Polygon.class);
+            builder.length(25).add("label", String.class);
+            builder.add("target", Boolean.class);
+
+            // build the type
+            final SimpleFeatureType TYPE = builder.buildFeatureType();
+
+            DefaultFeatureCollection boundariesFeatures = new DefaultFeatureCollection("boundaries", TYPE);
+            WKTReader2 wkt = new WKTReader2();
+
+            List<AdministrativeBoundary> boundaries = getAdminBoundary(boundaryId, customCrsInt);
+
+            if (boundaries == null || boundaries.size() < 1) {
+                return null;
+            }
+
+            for (AdministrativeBoundary boundary : boundaries) {
+                boundariesFeatures.add(SimpleFeatureBuilder.build(TYPE, new Object[]{
+                    wkt.read(boundary.getGeom()), boundary.getName(), true}, boundary.getId()));
+            }
+
+            URL sldURL = MapImageEJB.class.getResource(resourcesPath + "admin_boundary.xml");
+
+            return getMap("Boundary", sldURL, boundariesFeatures, width, height, crs);
+        } catch (Exception e) {
+            LogUtility.log("Failed to create map", e);
+            throw new SOLAException(ServiceMessage.OT_WS_CLAIM_FAILED_TO_CREATE_MAP);
+        }
+    }
+
+    // Returns map filled with features
+    private MapContent getMap(String title, URL sldURL, DefaultFeatureCollection features, int width, int height, CoordinateReferenceSystem crs) {
+        try {
+            if (features == null || features.size() < 1) {
+                return null;
+            }
+
+            SimpleFeatureSource parcelsSource = DataUtilities.source(features);
 
             // Create a map content and add our shapefile to it
             MapContent map = new MapContent();
-            map.setTitle("Parcel plan");
-            //map.getViewport().setCoordinateReferenceSystem(CRS.decode("EPSG:" + crs));
+            map.setTitle(title);
             map.getViewport().setCoordinateReferenceSystem(crs);
 
             StyleFactory styleFactory = CommonFactoryFinder.getStyleFactory();
-            URL sldURL = MapImageEJB.class.getResource(resourcesPath + "cert_parcel.xml");
             SLDParser stylereader;
             stylereader = new SLDParser(styleFactory, sldURL);
             Style sldStyle = stylereader.readXML()[0];
@@ -208,7 +293,7 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
      */
     @Override
     public BufferedImage getMapImage(String claimId, int width, int height, boolean drawScale, String scaleLabel) {
-        MapContent map = getMap(claimId, width - mapMargin, height - mapMargin);
+        MapContent map = getParcelMap(claimId, width - mapMargin, height - mapMargin);
 
         if (map == null) {
             return null;
@@ -231,7 +316,7 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
     public BufferedImage getMapImage(String claimId, int width, int height,
             double scale, boolean drawScale, String scaleLabel) {
         try {
-            MapContent map = getMap(claimId, width - mapMargin, height - mapMargin);
+            MapContent map = getParcelMap(claimId, width - mapMargin, height - mapMargin);
 
             if (map == null) {
                 return null;
@@ -243,8 +328,26 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
         }
     }
 
-    private BufferedImage getMapImage(MapContent map, int width, double scale,
-            boolean drawScale, String scaleLabel) {
+    /**
+     * Returns administrative boundary map image
+     *
+     * @param boundaryId = Boundary ID
+     * @param width = Map width
+     * @param height = Map height
+     * @param drawScale Indicate whether to add scale label on the image
+     * @param scaleLabel Text for "Scale" label
+     * @return
+     */
+    @Override
+    public BufferedImage getBoundaryMapImage(String boundaryId, int width, int height, boolean drawScale, String scaleLabel){
+        MapContent map = getAdminBoundaryMap(boundaryId, width, height);
+        if (map == null) {
+            return null;
+        }
+        return getMapImage(map, width, getBestScaleForMapImage(map, width), drawScale, scaleLabel);
+    }
+    
+    private BufferedImage getMapImage(MapContent map, int width, double scale, boolean drawScale, String scaleLabel) {
         width = width - mapMargin;
         try {
             if (map == null) {
@@ -534,13 +637,13 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
             double realScale = mpp * (DPI / 2.54) * 100;
 
             int[] scales = {100, 500, 1000, 2000, 5000, 10000, 15000, 20000, 25000,
-                50000, 75000, 100000, 150000, 200000, 250000, 500000, 750000, 1000000};
+                50000, 75000, 100000, 150000, 200000, 250000, 500000, 750000, 1000000, 1200000, 1500000,2000000};
             for (int scale : scales) {
                 if (realScale < scale) {
                     return scale;
                 }
             }
-            return 1000000;
+            return 2000000;
         } catch (Exception e) {
             LogUtility.log("Failed to calculate best scale for the map image", e);
             throw new SOLAException(ServiceMessage.OT_WS_CLAIM_FAILED_TO_GET_MAP_SCALE);
@@ -557,7 +660,7 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
      */
     @Override
     public int getBestScaleForMapImage(String claimId, int width, int height) {
-        return getBestScaleForMapImage(getMap(claimId, width, height), width);
+        return getBestScaleForMapImage(getParcelMap(claimId, width, height), width);
     }
 
     private double round(double number, int precision) {
@@ -596,11 +699,11 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
             return 0;
         }
 
-        if (cutsPerWidth > minGridCuts) {
+        if (cutsPerWidth < minGridCuts) {
             cutsPerWidth = minGridCuts;
         }
 
-        int[] steps = {100000000, 10000000, 1000000, 100000, 10000, 1000, 500, 100, 50, 10, 1};
+        int[] steps = {100000000, 10000000, 1000000, 100000, 70000, 50000, 30000, 20000, 10000, 7000, 5000, 3000, 2000, 1000, 500, 100, 50, 10, 1};
 
         for (int cuts = cutsPerWidth; cuts >= 1; cuts--) {
             for (int step : steps) {
