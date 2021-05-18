@@ -348,7 +348,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         if (claim == null) {
             throw new SOLAException(ServiceMessage.GENERAL_OBJECT_IS_NULL);
         }
-
+        
         boolean newClaim = claim.isNew();
         boolean fullValidation = true;
         if (newClaim || claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.CREATED)) {
@@ -420,8 +420,12 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
                     }
                 }
             }
+        } else {
+         // generate value for nr based on First Nation
+         String recordingNr = generateRecordingNumber(claim.getBoundaryId());
+         claim.setNr(recordingNr);
         }
-
+ 
         // Save claim
         claim = getRepository().saveEntity(claim);
 
@@ -469,10 +473,16 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         boolean newClaim = claim.isNew();
 
         // Check claim fields
+
+        // Check for claim boundary_id field 
+        if (claim.getBoundaryId() == null) {
+            throw new SOLAException(ServiceMessage.BOUNDARY_ID_IS_NULL);
+        }
+      
         if (StringUtility.isEmpty(claim.getId())) {
             if (!newClaim) {
                 if (throwException) {
-                    throw new SOLAException(ServiceMessage.OT_WS_CLAIM_ID_REQUIERD);
+                    throw new SOLAException(ServiceMessage.OT_WS_CLAIM_ID_REQUIRED);
                 } else {
                     return false;
                 }
@@ -486,7 +496,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         if (fullValidation && requireSpatial.equals("1")
                 && StringUtility.isEmpty(claim.getMappedGeometry())) {
             if (throwException) {
-                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_GEOMETRY_REQUIERD);
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_GEOMETRY_REQUIRED);
             } else {
                 return false;
             }
@@ -495,7 +505,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         // Check claim type
         if (fullValidation && StringUtility.isEmpty(claim.getTypeCode())) {
             if (throwException) {
-                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_TYPE_REQUIERD);
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_TYPE_REQUIRED);
             } else {
                 return false;
             }
@@ -504,13 +514,13 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         // Check land use
         if (fullValidation && StringUtility.isEmpty(claim.getLandUseCode())) {
             if (throwException) {
-                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_LAND_USE_REQUIERD);
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_LAND_USE_REQUIRED);
             } else {
                 return false;
             }
         }
 
-        // Check area of intereset
+        // Check area of interest
         if (!StringUtility.isEmpty(claim.getMappedGeometry())
                 && !claimWithinCommunityArea(claim.getMappedGeometry())) {
             if (throwException) {
@@ -526,7 +536,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
                 && (claim.getClaimant().getEntityAction().equals(EntityAction.DELETE)
                 || claim.getClaimant().getEntityAction().equals(EntityAction.DISASSOCIATE)))) {
             if (throwException) {
-                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CLAIMANT_REQUIERD);
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CLAIMANT_REQUIRED);
             } else {
                 return false;
             }
@@ -534,7 +544,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
 
         if (StringUtility.isEmpty(claim.getClaimant().getId())) {
             if (throwException) {
-                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CLAIMANT_ID_REQUIERD);
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CLAIMANT_ID_REQUIRED);
             } else {
                 return false;
             }
@@ -542,7 +552,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
 
         if (StringUtility.isEmpty(claim.getClaimant().getName())) {
             if (throwException) {
-                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CLAIMANT_NAME_REQUIERD);
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CLAIMANT_NAME_REQUIRED);
             } else {
                 return false;
             }
@@ -705,7 +715,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
                             if (claimParty.noAction() || !claimParty.getEntityAction().equals(EntityAction.DELETE)) {
                                 if (StringUtility.isEmpty(claimParty.getId())) {
                                     if (throwException) {
-                                        throw new SOLAException(ServiceMessage.OT_WS_CLAIM_OWNER_ID_REQUIERD);
+                                        throw new SOLAException(ServiceMessage.OT_WS_CLAIM_OWNER_ID_REQUIRED);
                                     } else {
                                         return false;
                                     }
@@ -713,7 +723,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
 
                                 if (StringUtility.isEmpty(claimParty.getName())) {
                                     if (throwException) {
-                                        throw new SOLAException(ServiceMessage.OT_WS_CLAIM_OWNER_NAME_REQUIERD);
+                                        throw new SOLAException(ServiceMessage.OT_WS_CLAIM_OWNER_NAME_REQUIRED);
                                     } else {
                                         return false;
                                     }
@@ -2896,7 +2906,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_RECORD_CLAIM})
+    @RolesAllowed({RolesConstants.CS_RECORD_CLAIM, RolesConstants.CS_MODERATE_CLAIM})
     public AdministrativeBoundary saveAdministrativeBoundary(AdministrativeBoundary boundary) {
         if (boundary == null) {
             throw new SOLAException(ServiceMessage.GENERAL_OBJECT_IS_NULL);
@@ -2913,6 +2923,11 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         // Check type
         if (StringUtility.isEmpty(boundary.getTypeCode())) {
             throw new SOLAException(ServiceMessage.OT_WS_BOUNDARY_TYPE_EMPTY);
+        }
+        
+        // Check Authority Code
+        if (StringUtility.isEmpty(boundary.getAuthorityCode())) {
+            throw new SOLAException(ServiceMessage.OT_WS_BOUNDARY_AUTHORITY_CODE_EMPTY);
         }
 
         // Check status
@@ -2953,7 +2968,8 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
                 }
             }
         }
-
+        // Create Claim sequence for boundary
+        createFirstNationSequence(boundary.getAuthorityCode(),boundary.getName());
         // Save
         return getRepository().saveEntity(boundary);
     }
@@ -3048,4 +3064,49 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         return null;
     }
 
+    /**
+     * Creates a new sequence (for numbering of recordings) when a First Nation is added to alur.
+     *
+     * @param firstNationCode for the First Nation code
+     * @param firstNationName for the First Nation name
+     */
+    @Override
+    @RolesAllowed({RolesConstants.CS_RECORD_CLAIM, RolesConstants.CS_MODERATE_CLAIM})
+    public int createFirstNationSequence(String firstNationCode, String firstNationName) {
+        String sqlStatement = "select opentenure.create_claim_seq(#{_seq}, #{_bdy_name}) as vl";
+        Map params = new HashMap();
+        String seq_name;
+        seq_name = firstNationCode + "_nr_seq";
+        params.put(CommonSqlProvider.PARAM_QUERY, sqlStatement);
+        params.put("_seq", seq_name);
+        params.put("_bdy_name", firstNationName);
+        // Check if new sequence is created (in opentenure schema of SOLA database
+        Integer result = 0;
+        result = getRepository().getScalar(Integer.class, params);
+        if (result == 0) {
+            throw new SOLAException(ServiceMessage.OT_WS_CLAIM_NR_SEQUENCE_CANNOT_BE_CREATED, new Object[]{firstNationCode});
+        }
+        return result;
+    }
+
+    /**
+     * Generates a (claim) nr value (for numbering of recordings) when a new recording (permit) is added to ALUR.
+     *
+     * @param boundaryId for the First Nation code
+     * @return 
+     */
+    @Override
+    @RolesAllowed({RolesConstants.CS_RECORD_CLAIM, RolesConstants.CS_MODERATE_CLAIM})
+    public String generateRecordingNumber(String boundaryId) {
+        String sqlStatement = "select opentenure.generate_recording_nr(#{boundary_id}) as vl";
+        Map params = new HashMap();
+        params.put(CommonSqlProvider.PARAM_QUERY, sqlStatement);
+        params.put("boundary_id", boundaryId);
+        String result;
+        result = getRepository().getScalar(String.class, params);
+        if (result == null) {
+            throw new SOLAException(ServiceMessage.OT_WS_RECORDING_NR_NOT_GENERATED, new Object[]{});
+        }
+        return result;
+    }
 }

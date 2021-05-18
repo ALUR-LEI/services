@@ -94,4 +94,16 @@ public interface ClaimEJBLocal extends AbstractEJBLocal {
     boolean approveAdministrativeBoundary(String boundaryId);
     boolean reviseAdministrativeBoundary(String boundaryId);
     SpatialUnit getSpatialUnit(String id);
+
+    /**
+     * See {@linkplain ClaimEJB#createFirstNationSequence(String, String)
+     * ClaimEJB.createFirstNationSequence}
+     */
+    int createFirstNationSequence(String firstNationCode, String firstNationName);
+    
+    /**
+     * See {@linkplain ClaimEJB#generateRecordingNumber(String)
+     * ClaimEJB.generateRecordingNumber}
+     */
+    String generateRecordingNumber(String boundaryId);
 }

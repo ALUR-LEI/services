@@ -13,3 +13,4 @@ Thumbs.db
 thumbs.db
 *.pdf
 *.log
+/ejbs/admin/target 2/

@@ -3,7 +3,9 @@ package org.sola.cs.services.ejbs.claim.entities;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.persistence.Column;
 import javax.persistence.Id;
 import javax.persistence.Table;
@@ -15,6 +17,7 @@ import org.sola.services.common.repository.RepositoryUtility;
 import org.sola.services.common.repository.entities.AbstractVersionedEntity;
 import org.sola.cs.services.ejb.system.br.Result;
 import org.sola.cs.services.ejb.system.businesslogic.SystemCSEJBLocal;
+import org.sola.cs.services.ejbs.claim.businesslogic.ClaimEJB;
 
 @Table(schema = "opentenure", name = "claim")
 public class Claim extends AbstractVersionedEntity {
@@ -455,11 +458,4 @@ public class Claim extends AbstractVersionedEntity {
         return result;
     }
 
-    @Override
-    public void preSave() {
-        if (isNew()) {
-            setNr(generateNumber());
-        }
-        super.preSave();
-    }
 }
