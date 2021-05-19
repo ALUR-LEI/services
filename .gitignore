@@ -14,3 +14,7 @@ thumbs.db
 *.pdf
 *.log
 /ejbs/admin/target 2/
+.DS_Store
+._.DS_Store
+**/.DS_Store
+**/._.DS_Store
