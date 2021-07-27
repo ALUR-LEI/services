@@ -60,7 +60,7 @@ import org.sola.services.common.repository.CommonSqlProvider;
  * Implements methods to generate boundary map image
  */
 @Stateless
-@EJB(name = "java:app/AdministrativeBoundaryMapImageEJBLocal", beanInterface = CommunityBoundaryMapImageEJBLocal.class)
+@EJB(name = "java:app/CommunityBoundaryMapImageEJBLocal", beanInterface = CommunityBoundaryMapImageEJBLocal.class)
 public class CommunityBoundaryMapImageEJB extends AbstractEJB implements CommunityBoundaryMapImageEJBLocal {
 
     @EJB
