@@ -91,7 +91,7 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
         return getRepository().getEntityList(AdministrativeBoundarySpatial.class, params);
     }
 
-    // Returns map filled with claim polygons
+    // Returns map filled with boundary polygons
     private MapContent getBoundaryMap(String boundaryId, int width, int height) {
         try {
             String crsWkt = "GEOGCS[\"WGS 84\", \n"
@@ -129,10 +129,10 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
             // build the type
             final SimpleFeatureType TYPE = builder.buildFeatureType();
 
-            DefaultFeatureCollection claimFeatures = new DefaultFeatureCollection("parcels", TYPE);
+            DefaultFeatureCollection boundaryFeatures = new DefaultFeatureCollection("parcels", TYPE);
             WKTReader2 wkt = new WKTReader2();
 
-            // Get claims by claim polygons
+            // Get boundaries by boundary polygons
             List<AdministrativeBoundarySpatial> boundaries = getSpatialBoundariesByBoundary(boundaryId, customCrsInt);
 
             if (boundaries == null || boundaries.size() < 1) {
@@ -140,11 +140,11 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
             }
 
             for (AdministrativeBoundarySpatial boundary : boundaries) {
-                claimFeatures.add(SimpleFeatureBuilder.build(TYPE, new Object[]{
+                boundaryFeatures.add(SimpleFeatureBuilder.build(TYPE, new Object[]{
                     wkt.read(boundary.getGeom()), boundary.getName(), boundary.isTarget()}, boundary.getId()));
             }
 
-            SimpleFeatureSource parcelsSource = DataUtilities.source(claimFeatures);
+            SimpleFeatureSource parcelsSource = DataUtilities.source(boundaryFeatures);
 
             // Create a map content and add our shapefile to it
             MapContent map = new MapContent();
@@ -196,10 +196,10 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
     }
 
     /**
-     * Returns map image, containing claim polygon and its surrounding claims.
+     * Returns map image, containing boundary polygon and its surrounding boundaries.
      * Map scale is automatically calculated to best fit.
      *
-     * @param claimId = Claim ID
+     * @param boundaryId = Boundary ID
      * @param width = Map width
      * @param height = Map height
      * @param drawScale Indicate whether to add scale label on the image
@@ -217,9 +217,9 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
     }
 
     /**
-     * Returns map image, containing claim parcel and its surrounding parcels
+     * Returns map image, containing community boundary and its surrounding community boundaries
      *
-     * @param claimId = Claim ID
+     * @param boundaryId = Boundary ID
      * @param width = Map width
      * @param height = Map height
      * @param scale = Map scale
@@ -534,13 +534,14 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
             double realScale = mpp * (DPI / 2.54) * 100;
 
             int[] scales = {100, 500, 1000, 2000, 5000, 10000, 15000, 20000, 25000,
-                50000, 75000, 100000, 150000, 200000, 250000, 500000, 750000, 1000000};
+                50000, 75000, 100000, 150000, 200000, 250000, 500000, 750000, 1000000,
+                2000000, 2500000, 5000000, 7500000, 10000000};
             for (int scale : scales) {
                 if (realScale < scale) {
                     return scale;
                 }
             }
-            return 1000000;
+            return 50000000;
         } catch (Exception e) {
             LogUtility.log("Failed to calculate best scale for the map image", e);
             throw new SOLAException(ServiceMessage.OT_WS_CLAIM_FAILED_TO_GET_MAP_SCALE);
@@ -550,14 +551,14 @@ public class CommunityBoundaryMapImageEJB extends AbstractEJB implements Communi
     /**
      * Calculates best scale for the map image
      *
-     * @param claimId = Claim ID
+     * @param boundaryId = Boundary ID
      * @param width = Map width
      * @param height = Map height
      * @return
      */
     @Override
-    public int getBestScaleForMapImage(String claimId, int width, int height) {
-        return getBestScaleForMapImage(getBoundaryMap(claimId, width, height), width);
+    public int getBestScaleForMapImage(String boundaryId, int width, int height) {
+        return getBestScaleForMapImage(getBoundaryMap(boundaryId, width, height), width);
     }
 
     private double round(double number, int precision) {

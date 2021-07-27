@@ -637,13 +637,14 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
             double realScale = mpp * (DPI / 2.54) * 100;
 
             int[] scales = {100, 500, 1000, 2000, 5000, 10000, 15000, 20000, 25000,
-                50000, 75000, 100000, 150000, 200000, 250000, 500000, 750000, 1000000, 1200000, 1500000,2000000};
+                50000, 75000, 100000, 150000, 200000, 250000, 500000, 750000, 1000000,
+                2000000, 2500000, 5000000, 7500000, 10000000};
             for (int scale : scales) {
                 if (realScale < scale) {
                     return scale;
                 }
             }
-            return 2000000;
+            return 50000000;            
         } catch (Exception e) {
             LogUtility.log("Failed to calculate best scale for the map image", e);
             throw new SOLAException(ServiceMessage.OT_WS_CLAIM_FAILED_TO_GET_MAP_SCALE);
