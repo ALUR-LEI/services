@@ -338,14 +338,14 @@ public class MapImageEJB extends AbstractEJB implements MapImageEJBLocal {
      * @param scaleLabel Text for "Scale" label
      * @return
      */
-    @Override
-    public BufferedImage getBoundaryMapImage(String boundaryId, int width, int height, boolean drawScale, String scaleLabel){
-        MapContent map = getAdminBoundaryMap(boundaryId, width, height);
-        if (map == null) {
-            return null;
-        }
-        return getMapImage(map, width, getBestScaleForMapImage(map, width), drawScale, scaleLabel);
-    }
+//    @Override
+//    public BufferedImage getBoundaryMapImage(String boundaryId, int width, int height, boolean drawScale, String scaleLabel){
+//        MapContent map = getAdminBoundaryMap(boundaryId, width, height);
+//        if (map == null) {
+//            return null;
+//        }
+//        return getMapImage(map, width, getBestScaleForMapImage(map, width), drawScale, scaleLabel);
+//    }
     
     private BufferedImage getMapImage(MapContent map, int width, double scale, boolean drawScale, String scaleLabel) {
         width = width - mapMargin;

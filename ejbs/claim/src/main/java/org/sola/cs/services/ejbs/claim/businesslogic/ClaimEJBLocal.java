@@ -62,6 +62,7 @@ public interface ClaimEJBLocal extends AbstractEJBLocal {
     boolean canRevertClaimReview(String claimId);
     boolean submitClaim(String claimId, String languageCode);
     boolean canPrintClaimCertificate(String claimId, String languageCode);
+    boolean canPrintClaimLease(String claimId, String languageCode);
     boolean canIssueCertificate(String ClaimId);
     boolean canRenewCertificate(String ClaimId);
     boolean canTransferClaim(String claimId);
@@ -92,7 +93,7 @@ public interface ClaimEJBLocal extends AbstractEJBLocal {
     AdministrativeBoundary saveAdministrativeBoundary(AdministrativeBoundary boundary);
     void deleteAdministrativeBoundary(String boundaryId);
     boolean approveAdministrativeBoundary(String boundaryId);
-    boolean reviseAdministrativeBoundary(String boundaryId);
+    boolean reviseAdministrativeBoundary(String boundaryId);    
     SpatialUnit getSpatialUnit(String id);
 
     /**

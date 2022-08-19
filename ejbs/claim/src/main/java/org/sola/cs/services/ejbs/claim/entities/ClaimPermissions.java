@@ -17,6 +17,7 @@ public class ClaimPermissions {
     boolean canChallengeClaim = false;
     boolean canRevert = false;
     boolean canPrintCertificate = false;
+    boolean canPrintLease = false;
     boolean canIssue = false;
     boolean canCancel = false;
     boolean canTransfer = false;
@@ -59,6 +60,13 @@ public class ClaimPermissions {
         this.canPrintCertificate = canPrintCertificate;
     }
 
+    public boolean isCanPrintLease() {
+        return canPrintLease;
+    }
+    
+    public void setCanPrintLease(boolean canPrintLease) {
+        this.canPrintLease = canPrintLease;
+    }
     public boolean isCanSubmitClaim() {
         return canSubmitClaim;
     }

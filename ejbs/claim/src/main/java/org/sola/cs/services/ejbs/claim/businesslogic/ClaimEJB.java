@@ -12,6 +12,7 @@ import javax.annotation.security.RolesAllowed;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
 import org.sola.common.ClaimStatusConstants;
+import org.sola.common.ClaimTypeConstants;
 import org.sola.common.ConfigConstants;
 import org.sola.common.DateUtility;
 import org.sola.common.DynamicFormException;
@@ -425,6 +426,55 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
          String recordingNr = generateRecordingNumber(claim.getBoundaryId());
          claim.setNr(recordingNr);
         }
+
+        // If new claim and claimant also appears as one of the owners, make then sa same object
+        if(newClaim){
+            if(claim.getShares() != null && claim.getClaimant() != null){
+                for(ClaimShare share: claim.getShares()){
+                    if(share.getOwners()!= null){
+                        for(ClaimParty owner: share.getOwners()){
+                            if(owner.getId().equals(claim.getClaimant().getId())){
+                                claim.setClaimant(owner);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Reset claimant and owners ids to make sure the claim is not using existing party id
+            // Reset owners first 
+            if(claim.getShares() != null){
+                for(ClaimShare share: claim.getShares()){
+                    if(share.getOwners()!= null){
+                        for(ClaimParty owner: share.getOwners()){
+                            owner.setId(UUID.randomUUID().toString());
+                        }
+                    }
+                }
+            }
+            
+            // Reset claimant
+            if(claim.getClaimant() != null){
+                claim.getClaimant().setId(UUID.randomUUID().toString());
+            }
+        }
+        
+        // check if claimant is new (insert) or not (swap for reference)
+        /*ClaimParty claimant = getRepository().getEntity(ClaimParty.class, claim.getClaimantId());
+        if (claimant != null) {
+            claim.setClaimant(claimant);
+        }
+        
+        // check if ownsers are new (insert) or not (swap for reference)
+        ClaimParty owner;
+        for (ClaimShare share : claim.getShares()) {
+            for (int i=0; i<share.getOwners().size(); i++) {
+                owner = getRepository().getEntity(ClaimParty.class, share.getOwners().get(i).getId());
+                if (owner != null) {
+                    share.getOwners().set(i, owner);
+                }
+            }
+        }*/
  
         // Save claim
         claim = getRepository().saveEntity(claim);
@@ -474,9 +524,10 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
 
         // Check claim fields
 
-        // Check for claim boundary_id field 
-        if (claim.getBoundaryId() == null) {
-            throw new SOLAException(ServiceMessage.BOUNDARY_ID_IS_NULL);
+        // Check for claim boundary_id field - required for claim nr generation
+        if (claim.getBoundaryId() == null)  {
+//            throw new SOLAException(ServiceMessage.BOUNDARY_ID_IS_NULL);
+            throw new SOLAException(ServiceMessage.GENERAL_COMMUNITY_AREA_IS_MISSING);
         }
       
         if (StringUtility.isEmpty(claim.getId())) {
@@ -1932,16 +1983,80 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             }
             return false;
         }
-
-        if (claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)
-                && isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE)) {
-            return true;
-        } else {
+        // Check user is assigned to the claim
+        String userName = getUserName();
+        if (!StringUtility.empty(claim.getAssigneeName()).equalsIgnoreCase(userName)) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_ASSIGNED_TO_OTHER_USER);
+            }
+            return false;
+        }
+        
+        if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CERT_PRINT_NOT_ALLOWED);
             }
             return false;
         }
+        
+        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE) ) {
+             if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CERT_PRINT_NOT_ALLOWED);
+            }
+            return false;
+
+        }
+        if (! claim.getTypeCode().equalsIgnoreCase(ClaimTypeConstants.CUSTOMARY)) {
+             if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CERT_PRINT_NOT_ALLOWED);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public boolean canPrintClaimLease(String claimId, String languageCode) {
+        return canPrintClaimLease(getRepository().getEntity(Claim.class, claimId), false);
+
+    }
+
+    private boolean canPrintClaimLease(Claim claim, boolean throwException) {
+        if (claim == null) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_NOT_FOUND);
+            }
+            return false;
+        }
+        // Check user is assigned to the claim
+        String userName = getUserName();
+        if (!StringUtility.empty(claim.getAssigneeName()).equalsIgnoreCase(userName)) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_ASSIGNED_TO_OTHER_USER);
+            }
+            return false;
+        }
+        
+        if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
+            if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_LEASE_PRINT_NOT_ALLOWED);
+            }
+            return false;
+        }
+        
+        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE) ) {
+             if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_LEASE_PRINT_NOT_ALLOWED);
+            }
+            return false;
+        }
+        if (! claim.getTypeCode().equalsIgnoreCase(ClaimTypeConstants.LEASE)) {
+             if (throwException) {
+                throw new SOLAException(ServiceMessage.OT_WS_LEASE_PRINT_NOT_ALLOWED);
+            }
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -2807,6 +2922,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         permissions.setCanChallengeClaim(canChallengeClaim(claim, false));
         permissions.setCanRevert(canRevertClaimReview(claim, false));
         permissions.setCanPrintCertificate(canPrintClaimCertificate(claim, false));
+        permissions.setCanPrintLease(canPrintClaimLease(claim, false));
         permissions.setCanIssue(canIssueCertificate(claim, false));
         permissions.setCanRenew(canRenewCertificate(claim, false));
         permissions.setCanCancel(canCancelCertificate(claim, false));        
