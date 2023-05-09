@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mappings xmlns="http://dozer.sourceforge.net"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://dozer.sourceforge.net
+          http://dozer.sourceforge.net/schema/beanmapping.xsd">
+
+    <!-- Mappings used to configure the NonCumulativeListConverter. This converter takes the
+    entity list class and TO list class as a parameter to overcome the issue of Java type erasure. 
+    The order of the classes in the parameter field is not important. The converter will be used
+    on the named fields for both toTO and fromTO translation. Resolves issue #178 (Lighthouse) -->
+     
+</mappings>
