@@ -17,6 +17,8 @@ public class MapSearchResult extends AbstractReadOnlyEntity {
     public static final String PARAM_NAME = "claimantName";
     public static final String PARAM_CLAIM_NUMBER = "claimNumber";
     public static final String PARAM_POINT = "pointParam";
+    public static final String PARAM_STATUS_CODE = "statusCode";
+    public static final String PARAM_USER_BOUNDARY_ID = "userBoundaryId";
     private static final String SELECT_PART
             = "select c.id, c.nr, string_agg(trim(both ' ' from p.name || ' ' || coalesce(p.last_name, '')), ', ') as owner_names, st_astext(mapped_geometry) as geom \n"
             + "from opentenure.claim c \n"
@@ -29,7 +31,10 @@ public class MapSearchResult extends AbstractReadOnlyEntity {
             + "where (position(lower(#{" + PARAM_NAME + "}) in lower(COALESCE(p.name, '') || ' ' || COALESCE(p.last_name, ''))) > 0 \n"
             + "or position(lower(#{" + PARAM_CLAIM_NUMBER + "}) in lower(COALESCE(c.nr, ''))) > 0) \n"
             + "and (#{" + PARAM_POINT + "} = '' or ST_Contains(c.mapped_geometry, ST_GeomFromText(#{" + PARAM_POINT + "}, St_SRID(c.mapped_geometry)))) \n"
-            + "and c.status_code NOT IN ('rejected','withdrawn','created') \n"
+            + "and c.status_code NOT IN ('rejected','withdrawn','created') and \n"
+            + "(c.status_code = #{" + PARAM_STATUS_CODE + "} or #{" + PARAM_STATUS_CODE + "} = '') and \n"
+            + "(case when #{" + PARAM_USER_BOUNDARY_ID + "} = '' or c.boundary_id = #{" + PARAM_USER_BOUNDARY_ID + "} then true \n"
+            + "	when c.status_code = 'moderated' then true else false end)"
             + "group by c.id, c.nr \n"
             + "limit 50;";
 

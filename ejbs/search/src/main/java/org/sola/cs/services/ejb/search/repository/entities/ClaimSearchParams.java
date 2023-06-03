@@ -11,6 +11,8 @@ public class ClaimSearchParams extends AbstractReadOnlyEntity {
     String languageCode;
     boolean searchByUser = false;
     String claimNumber;
+    String userBoundaryId;
+    String boundaryId;
     Date lodgementDateFrom;
     Date lodgementDateTo;
     
@@ -72,6 +74,22 @@ public class ClaimSearchParams extends AbstractReadOnlyEntity {
 
     public void setSearchByUser(boolean searchByUser) {
         this.searchByUser = searchByUser;
+    }
+
+    public String getUserBoundaryId() {
+        return userBoundaryId;
+    }
+
+    public void setUserBoundaryId(String userBoundaryId) {
+        this.userBoundaryId = userBoundaryId;
+    }
+
+    public String getBoundaryId() {
+        return boundaryId;
+    }
+
+    public void setBoundaryId(String boundaryId) {
+        this.boundaryId = boundaryId;
     }
 
     public String getLanguageCode() {

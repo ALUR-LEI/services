@@ -29,61 +29,81 @@ public class ClaimSearchResult extends AbstractReadOnlyEntity {
     private String statusCode;
     @Column(name = "status_name")
     private String statusName;
-    @Column(name="claim_area")
+    @Column(name = "claim_area")
     private Long claimArea;
-    @Column(name="rowversion")
+    @Column(name = "rowversion")
     private int version;
     @Column(name = "geom")
     private String geom;
-    
+    @Column(name = "boundary_name")
+    private String boundaryName;
+
     public static final String PARAM_NAME = "claimantName";
     public static final String PARAM_USERNAME = "userName";
     public static final String PARAM_CLAIM_NUMBER = "claimNumber";
     public static final String PARAM_DESCRIPTION = "claimDescription";
     public static final String PARAM_STATUS_CODE = "statusCode";
+    public static final String PARAM_USER_BOUNDARY_ID = "userBoundaryId";
+    public static final String PARAM_BOUNDARY_ID = "boundaryId";
     public static final String PARAM_DATE_FROM = "dateFrom";
     public static final String PARAM_DATE_TO = "dateTo";
     public static final String PARAM_RECORDER = "recorderName";
     public static final String PARAM_SEARCH_BY_USER = "searchByUser";
     public static final String PARAM_POINT = "pointParam";
-    private static final String SELECT_PART = 
-            "select c.id, c.nr, c.lodgement_date, c.claim_area, c.challenge_expiry_date, c.decision_date, c.description, \n"
+    private static final String SELECT_PART
+            = "select c.id, c.nr, c.lodgement_date, c.claim_area, c.challenge_expiry_date, c.decision_date, c.description, \n"
             + "ST_AsText(c.mapped_geometry) as geom, "
-            + "c.claimant_id, (p.name || ' ' || coalesce(p.last_name, '')) as claimant_name,\n"
-            + "c.challenged_claim_id, c.status_code, c.rowversion, get_translation(cs.display_value, #{" 
-            + CommonSqlProvider.PARAM_LANGUAGE_CODE + "}) as status_name\n"
+            + "c.claimant_id, string_agg(trim(p.name || ' ' || coalesce(p.last_name, '')), ', ') as claimant_name,\n"
+            + "c.challenged_claim_id, c.status_code, c.rowversion, get_translation(cs.display_value, #{"
+            + CommonSqlProvider.PARAM_LANGUAGE_CODE + "}) as status_name, b.name as boundary_name \n"
             + "\n"
             + "from (opentenure.claim c inner join opentenure.claim_status cs ON c.status_code = cs.code) \n"
-            + "left join opentenure.party p ON c.claimant_id = p.id\n"
+            + "left join (opentenure.claim_share sh left join opentenure.party_for_claim_share psh on sh.id = psh.claim_share_id left join opentenure.party p on psh.party_id = p.id) ON c.id = sh.claim_id \n"
+            + "left join opentenure.administrative_boundary b on c.boundary_id = b.id \n"
             + "\n";
-    
+
+    private static final String GROUP_BY_PART = " group by c.id, c.nr, c.lodgement_date, c.claim_area, c.challenge_expiry_date, c.decision_date, c.description, \n"
+            + "c.mapped_geometry, c.claimant_id,c.challenged_claim_id, c.status_code, c.rowversion, cs.display_value, b.name \n";
+
     public static final String QUERY_SEARCH_BY_POINT = SELECT_PART
-            + "WHERE ST_Contains(c.mapped_geometry, ST_GeomFromText(#{" + PARAM_POINT + "}, St_SRID(c.mapped_geometry))) AND c.status_code NOT IN ('rejected','withdrawn','created')";
-    
+            + "WHERE ST_Contains(c.mapped_geometry, ST_GeomFromText(#{" + PARAM_POINT + "}, St_SRID(c.mapped_geometry))) AND "
+            + "c.status_code NOT IN ('rejected','withdrawn','created') AND "
+            + "(c.status_code = #{" + PARAM_STATUS_CODE + "} or #{" + PARAM_STATUS_CODE + "} = '') and \n"
+            + "(case when #{" + PARAM_USER_BOUNDARY_ID + "} = '' or c.boundary_id = #{" + PARAM_USER_BOUNDARY_ID + "} then true \n"
+            + "	when c.status_code = 'moderated' then true else false end)" + GROUP_BY_PART;
+
     public static final String QUERY_SEARCH_ASSIGNED_TO_USER = SELECT_PART
-            + "WHERE c.assignee_name = #{" + PARAM_USERNAME + "} AND c.status_code IN ('reviewed','unmoderated') order by c.lodgement_date desc limit 100;";
-    
+            + "WHERE c.assignee_name = #{" + PARAM_USERNAME + "} AND c.status_code IN ('reviewed','unmoderated') " 
+            + GROUP_BY_PART + " order by c.lodgement_date desc limit 100;";
+
     public static final String QUERY_SEARCH_FOR_REVIEW = SELECT_PART
-            + "WHERE c.assignee_name is null AND c.status_code = 'unmoderated' and c.challenge_expiry_date <= now() order by c.lodgement_date desc limit 100;";
-    
+            + "WHERE c.assignee_name is null AND c.status_code = 'unmoderated' and c.challenge_expiry_date <= now() "
+            + GROUP_BY_PART + " order by c.lodgement_date desc limit 100;";
+
     public static final String QUERY_SEARCH_FOR_REVIEW_ALL = SELECT_PART
-            + "WHERE c.status_code = 'unmoderated' and c.challenge_expiry_date <= now() order by c.lodgement_date desc limit 100;";
-    
+            + "WHERE c.status_code = 'unmoderated' and c.challenge_expiry_date <= now() "
+            + GROUP_BY_PART + " order by c.lodgement_date desc limit 100;";
+
     public static final String QUERY_SEARCH_FOR_MODERATION = SELECT_PART
-            + "WHERE c.assignee_name is null AND c.status_code = 'reviewed' order by c.lodgement_date desc limit 100;";
-    
+            + "WHERE c.assignee_name is null AND c.status_code = 'reviewed' "
+            + GROUP_BY_PART + " order by c.lodgement_date desc limit 100;";
+
     public static final String QUERY_SEARCH_FOR_MODERATION_ALL = SELECT_PART
-            + "WHERE c.status_code = 'reviewed' order by c.lodgement_date desc limit 100;";
-    
+            + "WHERE c.status_code = 'reviewed' " + GROUP_BY_PART + " order by c.lodgement_date desc limit 100;";
+
     public static final String QUERY_SEARCH = SELECT_PART
-            + "where position(lower(#{" + PARAM_NAME + "}) in lower(p.name || ' ' || COALESCE(p.last_name, ''))) > 0 and\n"
-            + "position(lower(#{" + PARAM_DESCRIPTION + "}) in lower(COALESCE(c.description, ''))) > 0 and \n"
+            + "where position(lower(#{" + PARAM_DESCRIPTION + "}) in lower(regexp_replace(COALESCE(c.description, ''), E'[\\n\\r]+', ' ', 'g'))) > 0 and \n"
             + "position(lower(#{" + PARAM_CLAIM_NUMBER + "}) in lower(COALESCE(c.nr, ''))) > 0 and \n"
             + "(c.status_code = #{" + PARAM_STATUS_CODE + "} or #{" + PARAM_STATUS_CODE + "} = '') and \n"
             + "((c.lodgement_date between #{" + PARAM_DATE_FROM + "}::timestamp and #{" + PARAM_DATE_TO + "}::timestamp) \n"
             + "  or #{" + PARAM_DATE_FROM + "}::timestamp is null or #{" + PARAM_DATE_TO + "}::timestamp is null) and "
             + "(c.recorder_name = #{" + PARAM_RECORDER + "} or #{" + PARAM_SEARCH_BY_USER + "} = 'f') and "
-            + "(c.status_code != 'created' or c.recorder_name = #{" + PARAM_RECORDER + "})"
+            + "(c.status_code != 'created' or c.recorder_name = #{" + PARAM_RECORDER + "}) and "
+            + "(case when #{" + PARAM_USER_BOUNDARY_ID + "} = '' or c.boundary_id = #{" + PARAM_USER_BOUNDARY_ID + "} then true \n"
+            + "	when c.status_code = 'moderated' then true else false end) and \n"
+            + "(#{" + PARAM_BOUNDARY_ID + "} = '' or c.boundary_id = #{" + PARAM_BOUNDARY_ID + "}) \n"
+            + GROUP_BY_PART
+            + " having position(lower(#{" + PARAM_NAME + "}) in lower(string_agg(p.name || ' ' || coalesce(p.last_name, ''), ', '))) > 0 \n"
             + "order by c.lodgement_date desc, c.nr desc limit 100;";
 
     public ClaimSearchResult() {
@@ -200,5 +220,13 @@ public class ClaimSearchResult extends AbstractReadOnlyEntity {
 
     public void setGeom(String geom) {
         this.geom = geom;
+    }
+
+    public String getBoundaryName() {
+        return boundaryName;
+    }
+
+    public void setBoundaryName(String boundaryName) {
+        this.boundaryName = boundaryName;
     }
 }

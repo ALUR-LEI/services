@@ -64,6 +64,8 @@ public class User extends AbstractVersionedEntity {
     private String firstName;
     @Column(name = "last_name")
     private String lastName;
+    @Column(name = "admin_boundary_id")
+    private String adminBoundaryId;
     @Column(name = "active")
     private boolean active;
     @Column(name = "description")
@@ -169,6 +171,14 @@ public class User extends AbstractVersionedEntity {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public String getAdminBoundaryId() {
+        return adminBoundaryId;
+    }
+
+    public void setAdminBoundaryId(String adminBoundaryId) {
+        this.adminBoundaryId = adminBoundaryId;
     }
 
     public String getFullName() {

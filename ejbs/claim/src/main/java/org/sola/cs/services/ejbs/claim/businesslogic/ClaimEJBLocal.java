@@ -90,6 +90,7 @@ public interface ClaimEJBLocal extends AbstractEJBLocal {
     void splitClaim(Claim oldClaim, List<Claim> newClaims);
     AdministrativeBoundary getAdministrativeBoundary(String id);
     List<AdministrativeBoundary> getApprovedAdministrativeBoundaries();
+    List<AdministrativeBoundary> getAdministrativeBoundaries(String statusCode, String typeCode);
     AdministrativeBoundary saveAdministrativeBoundary(AdministrativeBoundary boundary);
     void deleteAdministrativeBoundary(String boundaryId);
     boolean approveAdministrativeBoundary(String boundaryId);

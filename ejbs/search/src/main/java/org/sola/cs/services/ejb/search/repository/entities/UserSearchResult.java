@@ -36,8 +36,10 @@ import org.sola.services.common.repository.entities.AbstractReadOnlyEntity;
 @Table(name = "appuser", schema = "system")
 public class UserSearchResult extends AbstractReadOnlyEntity {
 
+    public static final String PARAM_USERNAME = "user_name";
+    
     protected static final String SELECT_QUERY =
-            "SELECT DISTINCT u.id, u.username, u.active, u.first_name, u.last_name, u.description, "
+            "SELECT DISTINCT u.id, u.username, u.active, u.first_name, u.last_name, u.description, u.admin_boundary_id, "
             + "(SELECT string_agg(tmp.name, ', ') FROM "
             + "(SELECT name FROM system.appgroup g INNER JOIN system.appuser_appgroup ug2 "
             + "ON g.id = ug2.appgroup_id WHERE ug2.appuser_id = u.id ORDER BY g.name) tmp "
@@ -46,6 +48,9 @@ public class UserSearchResult extends AbstractReadOnlyEntity {
     
     public static final String QUERY_ACTIVE_USERS = UserSearchResult.SELECT_QUERY 
             + "WHERE active = 't' ORDER BY u.last_name";
+    
+    public static final String QUERY_BY_USER_NAME = UserSearchResult.SELECT_QUERY 
+            + "WHERE u.username = #{" + PARAM_USERNAME + "}";
     
     public static final String QUERY_ADVANCED_USER_SEARCH = UserSearchResult.SELECT_QUERY
             + "WHERE POSITION(LOWER(COALESCE(#{userName}, '')) IN LOWER(COALESCE(username, ''))) > 0 "
@@ -68,6 +73,8 @@ public class UserSearchResult extends AbstractReadOnlyEntity {
     private String description;
     @Column(name = "groups_list")
     private String groupsList;
+    @Column(name = "admin_boundary_id")
+    private String adminBoundaryId;
 
     public UserSearchResult() {
         super();
@@ -127,5 +134,13 @@ public class UserSearchResult extends AbstractReadOnlyEntity {
 
     public void setGroupsList(String groupsList) {
         this.groupsList = groupsList;
+    }
+
+    public String getAdminBoundaryId() {
+        return adminBoundaryId;
+    }
+
+    public void setAdminBoundaryId(String adminBoundaryId) {
+        this.adminBoundaryId = adminBoundaryId;
     }
 }

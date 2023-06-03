@@ -4,12 +4,12 @@
     <parent>
         <artifactId>sola-cs-services</artifactId>
         <groupId>org.sola.cs</groupId>
-        <version>2105a</version>
+        <version>2305a</version>
     </parent>
     <groupId>org.sola.cs.services</groupId>
     <artifactId>sola-cs-services-ear</artifactId>
     <packaging>ear</packaging>
-    <version>2105a</version>
+    <version>2305a</version>
     <name>Services CS EAR</name>
     <properties>
         
@@ -199,7 +199,7 @@
         <dependency>
             <groupId>org.fao.sola.admin.clients.web</groupId>
             <artifactId>sola-admin-clients-web</artifactId>
-            <version>1504a</version>
+            <version>2305a</version>
             <type>war</type>
         </dependency>
         <dependency>

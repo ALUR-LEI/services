@@ -1,17 +1,9 @@
 package org.sola.cs.services.ejbs.claim.entities;
 
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
 import javax.persistence.Column;
 import javax.persistence.Id;
 import javax.persistence.Table;
-import org.sola.cs.services.ejb.system.br.Result;
-import org.sola.cs.services.ejbs.admin.businesslogic.AdminCSEJBLocal;
-import org.sola.cs.services.ejbs.claim.businesslogic.ClaimEJB;
-import org.sola.cs.services.ejb.system.repository.entities.BrCurrent;
 import org.sola.services.common.repository.AccessFunctions;
-import org.sola.services.common.repository.RepositoryUtility;
 import org.sola.services.common.repository.entities.AbstractVersionedEntity;
 
 @Table(schema = "opentenure", name = "administrative_boundary")
@@ -39,6 +31,13 @@ public class AdministrativeBoundary extends AbstractVersionedEntity {
             onChange = "ST_GeomFromText(#{geom})")
     private String geom;
 
+    public static final String PARAM_STATUS = "status";
+    public static final String PARAM_TYPE_CODE = "type_code";
+    
+    public static final String QUERY_BY_TYPE_AND_STATUS = "SELECT id, name, type_code, authority_name, authority_code, parent_id, recorder_name, status_code, ST_AsText(geom) as geom, rowversion, change_user, rowidentifier \n"
+            + "FROM opentenure.administrative_boundary \n"
+            + "WHERE (type_code = #{" + PARAM_TYPE_CODE + "} or #{" + PARAM_TYPE_CODE + "} = '') and \n"
+            + "(status_code = #{" + PARAM_STATUS + "} or #{" + PARAM_STATUS + "} = '')";
     public static final String QUERY_SELECT_APPROVED = "WITH RECURSIVE all_administrative_boundaries AS (\n"
             + " SELECT id, name, type_code, authority_name, authority_code, parent_id, recorder_name, status_code, ST_AsText(geom) as geom, rowversion, change_user, rowidentifier, 1 as level, array[ROW_NUMBER() OVER (ORDER BY name)] AS path \n"
             + " FROM opentenure.administrative_boundary \n"

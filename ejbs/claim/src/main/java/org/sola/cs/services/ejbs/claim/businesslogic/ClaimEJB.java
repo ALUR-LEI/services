@@ -136,11 +136,33 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public Claim getClaim(String id) {
         Claim result = null;
         if (id != null) {
             result = getRepository().getEntity(Claim.class, id);
+
+            if (result != null) {
+                String claimStatus = StringUtility.empty(result.getStatusCode());
+
+                // Check investor role and user boundary
+                if (!claimStatus.equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
+                    if (isInRole(RolesConstants.INVESTOR)) {
+                        throw new SOLAException(ServiceMessage.OT_WS_CLAIM_NOT_FOUND);
+                    }
+
+                    // Check user boundary
+                    if (!StringUtility.isEmpty(result.getBoundaryId())) {
+                        User user = adminEjb.getCurrentUser();
+                        if (user != null && !StringUtility.isEmpty(user.getAdminBoundaryId())) {
+                            if (!result.getBoundaryId().equalsIgnoreCase(user.getAdminBoundaryId())) {
+                                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_NOT_FOUND);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Populate parent and child lists
             if (result != null && !StringUtility.isEmpty(result.getCreateTransaction())) {
                 // Get parents
@@ -167,7 +189,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
      * @return
      */
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public List<Claim> getChallengingClaimsByChallengedId(String challengedId) {
         HashMap params = new HashMap();
         params.put(CommonSqlProvider.PARAM_WHERE_PART, Claim.WHERE_BY_CHALLENGED_ID);
@@ -349,7 +371,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         if (claim == null) {
             throw new SOLAException(ServiceMessage.GENERAL_OBJECT_IS_NULL);
         }
-        
+
         boolean newClaim = claim.isNew();
         boolean fullValidation = true;
         if (newClaim || claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.CREATED)) {
@@ -422,43 +444,43 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
                 }
             }
         } else {
-         // generate value for nr based on First Nation
-         String recordingNr = generateRecordingNumber(claim.getBoundaryId());
-         claim.setNr(recordingNr);
+            // generate value for nr based on First Nation
+            String recordingNr = generateRecordingNumber(claim.getBoundaryId());
+            claim.setNr(recordingNr);
         }
 
         // If new claim and claimant also appears as one of the owners, make then sa same object
-        if(newClaim){
-            if(claim.getShares() != null && claim.getClaimant() != null){
-                for(ClaimShare share: claim.getShares()){
-                    if(share.getOwners()!= null){
-                        for(ClaimParty owner: share.getOwners()){
-                            if(owner.getId().equals(claim.getClaimant().getId())){
+        if (newClaim) {
+            if (claim.getShares() != null && claim.getClaimant() != null) {
+                for (ClaimShare share : claim.getShares()) {
+                    if (share.getOwners() != null) {
+                        for (ClaimParty owner : share.getOwners()) {
+                            if (owner.getId().equals(claim.getClaimant().getId())) {
                                 claim.setClaimant(owner);
                             }
                         }
                     }
                 }
             }
-            
+
             // Reset claimant and owners ids to make sure the claim is not using existing party id
             // Reset owners first 
-            if(claim.getShares() != null){
-                for(ClaimShare share: claim.getShares()){
-                    if(share.getOwners()!= null){
-                        for(ClaimParty owner: share.getOwners()){
+            if (claim.getShares() != null) {
+                for (ClaimShare share : claim.getShares()) {
+                    if (share.getOwners() != null) {
+                        for (ClaimParty owner : share.getOwners()) {
                             owner.setId(UUID.randomUUID().toString());
                         }
                     }
                 }
             }
-            
+
             // Reset claimant
-            if(claim.getClaimant() != null){
+            if (claim.getClaimant() != null) {
                 claim.getClaimant().setId(UUID.randomUUID().toString());
             }
         }
-        
+
         // check if claimant is new (insert) or not (swap for reference)
         /*ClaimParty claimant = getRepository().getEntity(ClaimParty.class, claim.getClaimantId());
         if (claimant != null) {
@@ -475,7 +497,6 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
                 }
             }
         }*/
- 
         // Save claim
         claim = getRepository().saveEntity(claim);
 
@@ -523,13 +544,12 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         boolean newClaim = claim.isNew();
 
         // Check claim fields
-
         // Check for claim boundary_id field - required for claim nr generation
-        if (claim.getBoundaryId() == null)  {
+        if (claim.getBoundaryId() == null) {
 //            throw new SOLAException(ServiceMessage.BOUNDARY_ID_IS_NULL);
             throw new SOLAException(ServiceMessage.GENERAL_COMMUNITY_AREA_IS_MISSING);
         }
-      
+
         if (StringUtility.isEmpty(claim.getId())) {
             if (!newClaim) {
                 if (throwException) {
@@ -1068,7 +1088,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             return false;
         }
 
-        if  (!isInRole(RolesConstants.CS_MODERATE_CLAIM, RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_RECORD_CLAIM)) {
+        if (!isInRole(RolesConstants.CS_MODERATE_CLAIM, RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_RECORD_CLAIM)) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.EXCEPTION_INSUFFICIENT_RIGHTS);
             }
@@ -1076,7 +1096,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         }
 
         // Check claim nr begins with TEMP.... 
-        if (!(claim.getNr().substring(0,4)).equalsIgnoreCase("TEMP")) {
+        if (!(claim.getNr().substring(0, 4)).equalsIgnoreCase("TEMP")) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CANT_RENUMBER);
             }
@@ -1204,8 +1224,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         return changeClaimStatus(claimId, null, ClaimStatusConstants.UNMODERATED, null);
     }
 
-
-   @Override
+    @Override
     @RolesAllowed({RolesConstants.CS_MODERATE_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE})
     public boolean cancelCertificate(String claimId, final String languageCode) {
         if (StringUtility.isEmpty(claimId)) {
@@ -1991,23 +2010,23 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             }
             return false;
         }
-        
+
         if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CERT_PRINT_NOT_ALLOWED);
             }
             return false;
         }
-        
-        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE) ) {
-             if (throwException) {
+
+        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE)) {
+            if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CERT_PRINT_NOT_ALLOWED);
             }
             return false;
 
         }
-        if (! claim.getTypeCode().equalsIgnoreCase(ClaimTypeConstants.CUSTOMARY)) {
-             if (throwException) {
+        if (!claim.getTypeCode().equalsIgnoreCase(ClaimTypeConstants.CUSTOMARY)) {
+            if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CERT_PRINT_NOT_ALLOWED);
             }
             return false;
@@ -2036,22 +2055,22 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             }
             return false;
         }
-        
+
         if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_LEASE_PRINT_NOT_ALLOWED);
             }
             return false;
         }
-        
-        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE) ) {
-             if (throwException) {
+
+        if (!isInRole(RolesConstants.CS_REVIEW_CLAIM, RolesConstants.CS_PRINT_CERTIFICATE, RolesConstants.CS_ISSUE_CERTIFICATE)) {
+            if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_LEASE_PRINT_NOT_ALLOWED);
             }
             return false;
         }
-        if (! claim.getTypeCode().equalsIgnoreCase(ClaimTypeConstants.LEASE)) {
-             if (throwException) {
+        if (!claim.getTypeCode().equalsIgnoreCase(ClaimTypeConstants.LEASE)) {
+            if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_LEASE_PRINT_NOT_ALLOWED);
             }
             return false;
@@ -2473,7 +2492,6 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         return true;
     }
 
-
     @Override
     @RolesAllowed({RolesConstants.CS_ISSUE_CERTIFICATE})
     public boolean canRenewCertificate(String id) {
@@ -2513,8 +2531,6 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         return true;
     }
 
-
-    
     @Override
     @RolesAllowed({RolesConstants.CS_CANCEL_CERTIFICATE})
     public boolean canCancelCertificate(String claimId) {
@@ -2547,12 +2563,12 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
 
         // Check claim can be cancelled
         if (!((claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED))
-            || (claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.ISSUED)))){
+                || (claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.ISSUED)))) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CANT_ISSUE);
             }
             return false;
-        } 
+        }
         return true;
     }
 
@@ -2641,10 +2657,10 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             }
             return false;
         }
-        
+
         // Check claim status
-        if (!((claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) 
-            || (claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.ISSUED)))){
+        if (!((claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED))
+                || (claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.ISSUED)))) {
             if (throwException) {
                 throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CANT_TRANSFER);
             }
@@ -2772,17 +2788,16 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         }
 
         // Check claim to be issued
- //       if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
+        //       if (!claim.getStatusCode().equalsIgnoreCase(ClaimStatusConstants.MODERATED)) {
 //            if (throwException) {
 //                throw new SOLAException(ServiceMessage.OT_WS_CLAIM_CANT_ISSUE);
 //            }
 //            return false;
 //        }
         // Removed March 2021 as documents can need to be added when certificate has been approved and after certificate is issued
- //       if (canIssueCertificate(claim, throwException)) {
- //           return true;
- //       }
-
+        //       if (canIssueCertificate(claim, throwException)) {
+        //           return true;
+        //       }
         return true;
     }
 
@@ -2895,7 +2910,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public ClaimPermissions getClaimPermissions(String claimId) {
         ClaimPermissions permissions = new ClaimPermissions();
 
@@ -2925,13 +2940,13 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         permissions.setCanPrintLease(canPrintClaimLease(claim, false));
         permissions.setCanIssue(canIssueCertificate(claim, false));
         permissions.setCanRenew(canRenewCertificate(claim, false));
-        permissions.setCanCancel(canCancelCertificate(claim, false));        
+        permissions.setCanCancel(canCancelCertificate(claim, false));
         permissions.setCanTransfer(canTransferClaim(claim, false));
         return permissions;
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public Claim getClaimByNumber(String nr) {
         HashMap params = new HashMap();
         params.put(CommonSqlProvider.PARAM_WHERE_PART, Claim.WHERE_BY_CLAIM_NUMBER);
@@ -2960,7 +2975,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public boolean checkFormTemplateHasPayload(String formName) {
         if (formName == null) {
             return false;
@@ -3005,7 +3020,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public AdministrativeBoundary getAdministrativeBoundary(String id) {
         if (id != null) {
             return getRepository().getEntity(AdministrativeBoundary.class, id);
@@ -3013,6 +3028,18 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         return null;
     }
 
+    @Override
+    public List<AdministrativeBoundary> getAdministrativeBoundaries(String statusCode, String typeCode) {
+        statusCode = StringUtility.empty(statusCode);
+        typeCode = StringUtility.empty(typeCode);
+        
+        Map params = new HashMap<String, Object>();
+        params.put(CommonSqlProvider.PARAM_QUERY, AdministrativeBoundary.QUERY_BY_TYPE_AND_STATUS);
+        params.put(AdministrativeBoundary.PARAM_STATUS, statusCode);
+        params.put(AdministrativeBoundary.PARAM_TYPE_CODE, typeCode);
+        return getRepository().getEntityList(AdministrativeBoundary.class, params);
+    }
+    
     @Override
     //@RolesAllowed({RolesConstants.CS_ACCESS_CS})
     public List<AdministrativeBoundary> getApprovedAdministrativeBoundaries() {
@@ -3040,7 +3067,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
         if (StringUtility.isEmpty(boundary.getTypeCode())) {
             throw new SOLAException(ServiceMessage.OT_WS_BOUNDARY_TYPE_EMPTY);
         }
-        
+
         // Check Authority Code
         if (StringUtility.isEmpty(boundary.getAuthorityCode())) {
             throw new SOLAException(ServiceMessage.OT_WS_BOUNDARY_AUTHORITY_CODE_EMPTY);
@@ -3085,7 +3112,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
             }
         }
         // Create Claim sequence for boundary
-        createFirstNationSequence(boundary.getAuthorityCode(),boundary.getName());
+        createFirstNationSequence(boundary.getAuthorityCode(), boundary.getName());
         // Save
         return getRepository().saveEntity(boundary);
     }
@@ -3172,7 +3199,7 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public SpatialUnit getSpatialUnit(String id) {
         if (id != null) {
             return getRepository().getEntity(SpatialUnit.class, id);
@@ -3181,7 +3208,8 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     /**
-     * Creates a new sequence (for numbering of recordings) when a First Nation is added to alur.
+     * Creates a new sequence (for numbering of recordings) when a First Nation
+     * is added to alur.
      *
      * @param firstNationCode for the First Nation code
      * @param firstNationName for the First Nation name
@@ -3206,10 +3234,11 @@ public class ClaimEJB extends AbstractEJB implements ClaimEJBLocal {
     }
 
     /**
-     * Generates a (claim) nr value (for numbering of recordings) when a new recording (permit) is added to ALUR.
+     * Generates a (claim) nr value (for numbering of recordings) when a new
+     * recording (permit) is added to ALUR.
      *
      * @param boundaryId for the First Nation code
-     * @return 
+     * @return
      */
     @Override
     @RolesAllowed({RolesConstants.CS_RECORD_CLAIM, RolesConstants.CS_MODERATE_CLAIM})

@@ -95,6 +95,7 @@ import org.sola.services.common.repository.entities.AbstractEntity;
     RolesConstants.CS_REVIEW_CLAIM,
     RolesConstants.CS_VIEW_REPORTS,
     RolesConstants.CS_ISSUE_CERTIFICATE,
+    RolesConstants.INVESTOR,
     RolesConstants.CLASSIFICATION_CHANGE_CLASS,
     RolesConstants.CLASSIFICATION_UNRESTRICTED,
     RolesConstants.CLASSIFICATION_RESTRICTED,

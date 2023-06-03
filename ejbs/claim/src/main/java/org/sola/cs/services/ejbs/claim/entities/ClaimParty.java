@@ -35,6 +35,8 @@ public class ClaimParty extends AbstractVersionedEntity {
     private String userName;
     @Column(name="is_person")
     private boolean person;
+    @Column (name = "admin_boundary_id")
+    private String adminBoundaryId;
     
     public ClaimParty(){
         super();
@@ -142,5 +144,13 @@ public class ClaimParty extends AbstractVersionedEntity {
 
     public void setPerson(boolean person) {
         this.person = person;
+    }
+
+    public String getAdminBoundaryId() {
+        return adminBoundaryId;
+    }
+
+    public void setAdminBoundaryId(String adminBoundaryId) {
+        this.adminBoundaryId = adminBoundaryId;
     }
 }

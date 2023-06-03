@@ -66,8 +66,8 @@ import java.util.*;
 import javax.annotation.security.RolesAllowed;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
+import org.sola.common.ClaimStatusConstants;
 import org.sola.common.DateUtility;
 import org.sola.common.RolesConstants;
 import org.sola.common.SOLAException;
@@ -971,7 +971,7 @@ public class SearchCSEJB extends AbstractEJB implements SearchCSEJBLocal {
      * @return
      */
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public List<ClaimSpatialSearchResult> getAllClaims() {
         Map params = new HashMap();
         params.put(CommonSqlProvider.PARAM_WHERE_PART, ClaimSpatialSearchResult.WHERE_SEARCH_ALL);
@@ -995,10 +995,24 @@ public class SearchCSEJB extends AbstractEJB implements SearchCSEJBLocal {
         }
 
         String point = "POINT(" + x + " " + y + ")";
+        String userBoundary = "";
+        String statusCode = "";
+        
+        UserSearchResult user = searchCurrentUser();
+        if(user != null) {
+            userBoundary = StringUtility.empty(user.getAdminBoundaryId());
+        }
+        if(isInRole(RolesConstants.INVESTOR)) {
+            statusCode = ClaimStatusConstants.MODERATED;
+        }
+        
         HashMap params = new HashMap();
         params.put(CommonSqlProvider.PARAM_QUERY, ClaimSearchResult.QUERY_SEARCH_BY_POINT);
         params.put(ClaimSearchResult.PARAM_POINT, point);
         params.put(CommonSqlProvider.PARAM_LANGUAGE_CODE, langCode);
+        params.put(ClaimSearchResult.PARAM_USER_BOUNDARY_ID, userBoundary);
+        params.put(ClaimSearchResult.PARAM_STATUS_CODE, statusCode);
+        
         List<ClaimSearchResult> list = getRepository().getEntityList(ClaimSearchResult.class, params);
         if (list == null || list.size() < 1) {
             return null;
@@ -1007,6 +1021,13 @@ public class SearchCSEJB extends AbstractEJB implements SearchCSEJBLocal {
         }
     }
 
+    public UserSearchResult searchCurrentUser() {
+        Map params = new HashMap<String, Object>();
+        params.put(CommonSqlProvider.PARAM_QUERY, UserSearchResult.QUERY_BY_USER_NAME);
+        params.put(UserSearchResult.PARAM_USERNAME, this.getUserName());
+        return getRepository().getEntity(UserSearchResult.class, params);
+    }
+    
     /**
      * Searched and returns list of {@link ClaimSearchResult}.
      *
@@ -1014,21 +1035,34 @@ public class SearchCSEJB extends AbstractEJB implements SearchCSEJBLocal {
      * @return
      */
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public List<ClaimSearchResult> searchClaims(ClaimSearchParams searchParams) {
         Map params = new HashMap<String, Object>();
-
+        
+        UserSearchResult user = searchCurrentUser();
+        if(user != null) {
+            searchParams.setUserBoundaryId(user.getAdminBoundaryId());
+        }
+            
         // prepare params
         if (searchParams.getLodgementDateFrom() != null || searchParams.getLodgementDateTo() != null) {
             searchParams.setLodgementDateFrom(DateUtility.minimizeDate(searchParams.getLodgementDateFrom()));
             searchParams.setLodgementDateTo(DateUtility.maximizeDate(searchParams.getLodgementDateTo()));
         }
+        
         searchParams.setDescription(StringUtility.empty(searchParams.getDescription()));
         searchParams.setClaimNumber(StringUtility.empty(searchParams.getClaimNumber()));
         searchParams.setClaimantName(StringUtility.empty(searchParams.getClaimantName()));
         searchParams.setStatusCode(StringUtility.empty(searchParams.getStatusCode()));
         searchParams.setLanguageCode(StringUtility.empty(searchParams.getLanguageCode()));
+        searchParams.setUserBoundaryId(StringUtility.empty(searchParams.getUserBoundaryId()));
+        searchParams.setBoundaryId(StringUtility.empty(searchParams.getBoundaryId()));
 
+        // Limit investors for approvaed only
+        if(isInRole(RolesConstants.INVESTOR)) {
+            searchParams.setStatusCode(ClaimStatusConstants.MODERATED);
+        }
+        
         // put params into map
         params.put(CommonSqlProvider.PARAM_QUERY, ClaimSearchResult.QUERY_SEARCH);
         params.put(CommonSqlProvider.PARAM_LANGUAGE_CODE, searchParams.getLanguageCode());
@@ -1040,18 +1074,22 @@ public class SearchCSEJB extends AbstractEJB implements SearchCSEJBLocal {
         params.put(ClaimSearchResult.PARAM_SEARCH_BY_USER, searchParams.isSearchByUser());
         params.put(ClaimSearchResult.PARAM_RECORDER, getUserName());
         params.put(ClaimSearchResult.PARAM_STATUS_CODE, searchParams.getStatusCode());
+        params.put(ClaimSearchResult.PARAM_USER_BOUNDARY_ID, searchParams.getUserBoundaryId());
+        params.put(ClaimSearchResult.PARAM_BOUNDARY_ID, searchParams.getBoundaryId());
 
         return getRepository().getEntityList(ClaimSearchResult.class, params);
     }
 
     @Override
-    @RolesAllowed({RolesConstants.CS_ACCESS_CS})
+    @RolesAllowed({RolesConstants.CS_ACCESS_CS, RolesConstants.INVESTOR})
     public List<MapSearchResult> searchMap(String searchString) {
         Map params = new HashMap<String, Object>();
         String name = "";
         String point = "";
         String claimNumber = "";
-
+        String userBoundary = "";
+        String statusCode = "";
+        
         // prepare params
         if (!StringUtility.isEmpty(searchString)) {
             searchString = searchString.trim().replace("#", "");
@@ -1066,9 +1104,19 @@ public class SearchCSEJB extends AbstractEJB implements SearchCSEJBLocal {
                 claimNumber = searchString;
             }
         }
+        
+        UserSearchResult user = searchCurrentUser();
+        if(user != null) {
+            userBoundary = StringUtility.empty(user.getAdminBoundaryId());
+        }
+        if(isInRole(RolesConstants.INVESTOR)) {
+            statusCode = ClaimStatusConstants.MODERATED;
+        }
 
         params.put(CommonSqlProvider.PARAM_QUERY, MapSearchResult.QUERY_SEARCH);
         params.put(MapSearchResult.PARAM_NAME, name);
+        params.put(MapSearchResult.PARAM_STATUS_CODE, statusCode);
+        params.put(MapSearchResult.PARAM_USER_BOUNDARY_ID, userBoundary);
         params.put(MapSearchResult.PARAM_CLAIM_NUMBER, claimNumber);
         params.put(MapSearchResult.PARAM_POINT, point);
 
